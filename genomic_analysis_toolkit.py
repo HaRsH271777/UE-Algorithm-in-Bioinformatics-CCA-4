@@ -1,18 +1,20 @@
 """
-UE - Algorithm in Bioinformatics
-CCA4 
+genomic_analysis_toolkit.py
+A comprehensive Python module for genomic sequence analysis.
 
-Name: Harshvardhan Salunke
-TY B.TECH CSE Ai & DS
-PRN - 1032230341
+This script provides functions for:
+- Part A: GC Content, GC Skew, and k-mer frequency analysis.
+- Part B: Hamming distance, exact pattern matching, and fuzzy pattern matching.
 
+Author: [Your Name Here]
+Date: 21-Oct-2025
 """
 
 import collections
 import re
 import math # Needed for CpG calculation
 
-# --- Part A---
+# --- Part A: GC Content and Sequence Analysis ---
 
 def calculate_gc_content(seq):
     """
@@ -65,11 +67,6 @@ def gc_content_sliding_window(seq, window_size, step):
         
     Performance:
         Time: O(N*M), where N is seq length and M is window_size.
-              This is because for each window (approx N/step), 
-              we call calculate_gc_content, which is O(M).
-              *Optimization Note: This could be O(N) by using a
-              sliding window with a deque, adding/removing one 
-              base at a time, but this implementation is simpler.*
         Space: O(N/step), to store the results list.
     """
     seq = seq.upper()
@@ -132,10 +129,8 @@ def calculate_kmer_freq(seq, k):
         collections.Counter: A Counter object mapping k-mers to their counts.
         
     Performance:
-        Time: O(N*k), where N is sequence length. Slicing (seq[i:i+k])
-              can take O(k) time, and we do it N-k times.
+        Time: O(N*k), where N is sequence length.
         Space: O(4^k), in the worst case, to store the Counter dict.
-               In practice, it's O(U) where U is unique k-mers found.
     """
     seq = seq.upper()
     kmer_counts = collections.Counter()
@@ -143,8 +138,6 @@ def calculate_kmer_freq(seq, k):
     for i in range(len(seq) - k + 1):
         kmer = seq[i:i+k]
         
-        # A simple check for 'N'. A more robust check
-        # would use a set of allowed characters.
         if 'N' not in kmer:
             kmer_counts[kmer] += 1
             
@@ -159,7 +152,7 @@ def find_cpg_islands(seq, window_size=200, gc_threshold=50.0, oe_threshold=0.6):
     2. GC Content is above `gc_threshold`.
     3. Observed-to-Expected CpG ratio is above `oe_threshold`.
 
-    Argumentss:
+    Args:
         seq (str): The DNA sequence.
         window_size (int): The minimum length to check.
         gc_threshold (float): The minimum GC content (e.g., 50.0).
@@ -171,8 +164,6 @@ def find_cpg_islands(seq, window_size=200, gc_threshold=50.0, oe_threshold=0.6):
                                
     Performance:
         Time: O(N*M), where N is seq length and M is window_size.
-              We loop N-M times, and each window slice involves
-              O(M) work for .count() operations.
         Space: O(K), where K is the number of islands found.
     """
     seq = seq.upper()
@@ -181,78 +172,174 @@ def find_cpg_islands(seq, window_size=200, gc_threshold=50.0, oe_threshold=0.6):
     for i in range(len(seq) - window_size + 1):
         window = seq[i:i+window_size]
         
-        # 1. Check GC Content
         gc_content = calculate_gc_content(window)
         if gc_content < gc_threshold:
             continue
             
-        # 2. Check Observed/Expected CpG
-        # We need to be careful about division by zero
-        
         c_count = window.count('C')
         g_count = window.count('G')
         cg_count = window.count('CG')
         
+        if c_count == 0 or g_count == 0:
+            continue # Avoid division by zero if no C or G
+
         # Calculate expected value
-        # expected = (num_C * num_G) / window_length
         expected_cpg = (c_count * g_count) / window_size
         
         if expected_cpg == 0:
-            # If expected is 0, ratio is undefined.
-            # If observed (cg_count) is also 0, it's not an island.
-            # If observed > 0, this is a "perfect" island (infinite ratio)
-            if cg_count > 0:
-                 observed_expected_ratio = float('inf')
-            else:
-                 observed_expected_ratio = 0.0
-        else:
-            observed_expected_ratio = cg_count / expected_cpg
+            continue
             
-        # 3. Check O/E threshold
+        observed_expected_ratio = cg_count / expected_cpg
+            
         if observed_expected_ratio > oe_threshold:
             islands.append((i, i + window_size))
 
-
     return islands
 
+# --- Part B: Pattern Matching and Motif Discovery ---
 
+def hamming_distance(seq1, seq2):
+    """
+    Calculates the Hamming distance between two sequences.
+    The distance is the number of positions at which the
+    corresponding symbols are different.
+
+    Args:
+        seq1 (str): The first sequence.
+        seq2 (str): The second sequence.
+
+    Returns:
+        int: The Hamming distance.
+
+    Raises:
+        ValueError: If the sequences are of different lengths.
+        
+    Performance:
+        Time: O(N), where N is the length of the sequences.
+        Space: O(1).
+    """
+    if len(seq1) != len(seq2):
+        raise ValueError("Sequences must be of equal length for Hamming distance.")
+        
+    distance = 0
+    # zip stops at the shortest sequence, but we already checked lengths
+    for base1, base2 in zip(seq1.upper(), seq2.upper()):
+        if base1 != base2:
+            distance += 1
+            
+    return distance
+
+def find_exact_pattern(seq, pattern):
+    """
+    Finds all starting indices of an exact pattern, including overlaps.
+
+    Args:
+        seq (str): The sequence to search in.
+        pattern (str): The pattern to search for.
+
+    Returns:
+        list[int]: A list of 0-based starting indices.
+        
+    Performance:
+        Time: O(N*M) in the worst case (e.g., finding 'AAA' in 'AAAAA').
+        Space: O(K), where K is the number of matches found.
+    """
+    seq = seq.upper()
+    pattern = pattern.upper()
+    
+    pattern_escaped = re.escape(pattern)
+    
+    try:
+        # A positive lookahead `(?=...)` allows finding overlapping matches
+        indices = [m.start() for m in re.finditer(f'(?={pattern_escaped})', seq)]
+    except re.error:
+        print(f"Regex error with pattern: {pattern}")
+        return []
+        
+    return indices
+
+def find_fuzzy_pattern(seq, pattern, max_mismatch):
+    """
+    Finds all starting indices of a pattern with up to N mismatches.
+
+    Args:
+        seq (str): The sequence to search in.
+        pattern (str): The pattern to search for.
+        max_mismatch (int): The maximum number of allowed mismatches
+                            (Hamming distance).
+
+    Returns:
+        list[int]: A list of 0-based starting indices.
+        
+    Performance:
+        Time: O(N*M), where N is seq length and M is pattern length.
+        Space: O(K), where K is the number of matches found.
+    """
+    seq = seq.upper()
+    pattern = pattern.upper()
+    indices = []
+    pattern_len = len(pattern)
+    
+    if pattern_len > len(seq):
+        return [] # Pattern can't be found if it's longer
+        
+    for i in range(len(seq) - pattern_len + 1):
+        window = seq[i:i+pattern_len]
+        
+        try:
+            dist = hamming_distance(window, pattern)
+            if dist <= max_mismatch:
+                indices.append(i)
+        except ValueError:
+            continue 
+            
+    return indices
+
+
+# --- Main Test Block ---
 if __name__ == "__main__":
     
     print("--- Genomic Analysis Toolkit Tests ---")
 
     # --- Part A Test Cases ---
-    print("\n--- Part A: ---")
+    print("\n--- Part A: Sequence Analysis ---")
     seq_a = "AGCTATAGCGCCGATTAGCATGGTATAGTAGAATTC"
     seq_b = "NNNNNNNNNN"
     seq_c = "ATATATATAT"
     seq_d = "" # Empty sequence edge case
     
-    # Q1: GC Content
-    print(f"GC Content (seq_a): {calculate_gc_content(seq_a):.2f}%") # Should be almost 44.4%
-    print(f"GC Content (seq_b 'NNN'): {calculate_gc_content(seq_b):.2f}%") # Should be 0.0
-    print(f"GC Content (seq_c 'ATAT'): {calculate_gc_content(seq_c):.2f}%") # Should be 0.0
-    print(f"GC Content (seq_d ''): {calculate_gc_content(seq_d):.2f}%") # Should be 0.0
-
-    # Q1: GC Sliding Window
+    print(f"GC Content (seq_a): {calculate_gc_content(seq_a):.2f}%")
+    print(f"GC Content (seq_b 'NNN'): {calculate_gc_content(seq_b):.2f}%")
     win_gcs = gc_content_sliding_window(seq_a, 10, 5)
     print(f"Sliding Window GC (10, 5): {[round(g, 2) for g in win_gcs]}")
-    
-    # Q1: GC Skew
-    # seq_a[0:10] = 'AGCTATAGCG' (3G, 2C) -> (3-2)/(3+2) = 1/5 = 0.2
-    # seq_a[5:15] = 'TAGCGCCGAT' (4G, 2C) -> (4-2)/(4+2) = 2/6 = 0.33
     win_skews = calculate_gc_skew_sliding_window(seq_a, 10, 5)
     print(f"Sliding Window Skew (10, 5): {[round(s, 2) for s in win_skews]}")
-    
-    # Q2: k-mer Frequencies
     print(f"Dinucleotide Freq (seq_a): {calculate_kmer_freq(seq_a, 2).most_common(3)}")
-    print(f"Trinucleotide Freq (seq_a): {calculate_kmer_freq(seq_a, 3).most_common(3)}")
-
-    # Q2: CpG Islands
-    # This sequence is high GC and high CpG (CGCGC...)
     cpg_test_seq = "CGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCG" * 5
-    # This sequence is high GC but low CpG (CCC...GGG...)
     no_cpg_test_seq = "CCCCCCCCCCCCCCCCCCCCCCCCCCGGGGGGGGGGGGGGGGGGGGGGGGGG" * 5
-    
     print(f"CpG Islands (positive test): {find_cpg_islands(cpg_test_seq, 50, 50, 0.6)}")
     print(f"CpG Islands (negative test): {find_cpg_islands(no_cpg_test_seq, 50, 50, 0.6)}")
 
+    # --- Part B Test Cases ---
+    print("\n--- Part B: Pattern Matching ---")
+    
+    # Q3: Hamming Distance
+    try:
+        dist = hamming_distance("GATTACA", "GATTTCA")
+        print(f"Hamming ('GATTACA', 'GATTTCA'): {dist}") # Should be 1
+        print("Testing Hamming with different lengths:")
+        dist_fail = hamming_distance("AAA", "AAAA") # Should raise error
+    except ValueError as e:
+        print(f"Hamming Error (expected): {e}")
+
+    # Q4: Exact Pattern
+    pattern_seq = "ATATATACATAT"
+    pattern = "ATA"
+    print(f"Exact '{pattern}' in '{pattern_seq}': {find_exact_pattern(pattern_seq, pattern)}") # [0, 2, 4, 8]
+    print(f"Exact 'AAA' in 'AAAAA': {find_exact_pattern('AAAAA', 'AAA')}") # [0, 1, 2]
+
+    # Q4: Fuzzy Pattern
+    fuzzy_seq = "GATTACAT"
+    fuzzy_pattern = "GATTTCA"
+    print(f"Fuzzy '{fuzzy_pattern}' in '{fuzzy_seq}' (<=1 mismatch): {find_fuzzy_pattern(fuzzy_seq, fuzzy_pattern, 1)}") # [0]
+    print(f"Fuzzy '{fuzzy_pattern}' in '{fuzzy_seq}' (<=0 mismatch): {find_fuzzy_pattern(fuzzy_seq, fuzzy_pattern, 0)}") # []
