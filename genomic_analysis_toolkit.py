@@ -1,16 +1,11 @@
 """
-genomic_analysis_toolkit.py
-A comprehensive Python module for genomic sequence analysis.
+UE - Algorithm in Bioinformatics
+CCA3 
+Name: Harshvardhan Salunke
+TY B.TECH CSE Ai & DS
+PRN - 1032230341
 
-This script provides functions for:
-- Part A: GC Content, GC Skew, and k-mer frequency analysis.
-- Part B: Hamming distance, exact pattern matching, and fuzzy pattern matching.
-- Part C: Reading frame extraction, translation, and Open Reading Frame (ORF) finding.
-
-Author: [Your Name Here]
-Date: 23-Oct-2025
 """
-
 import collections
 import re
 import math # Needed for CpG calculation
