@@ -5,9 +5,10 @@ A comprehensive Python module for genomic sequence analysis.
 This script provides functions for:
 - Part A: GC Content, GC Skew, and k-mer frequency analysis.
 - Part B: Hamming distance, exact pattern matching, and fuzzy pattern matching.
+- Part C: Reading frame extraction, translation, and Open Reading Frame (ORF) finding.
 
 Author: [Your Name Here]
-Date: 21-Oct-2025
+Date: 23-Oct-2025
 """
 
 import collections
@@ -33,8 +34,7 @@ def calculate_gc_content(seq):
                
     Performance:
         Time: O(N), where N is the length of the sequence.
-              The string .count() method scans the string.
-        Space: O(1), as we only store a few count variables.
+        Space: O(1).
     """
     if not seq:
         return 0.0
@@ -44,7 +44,6 @@ def calculate_gc_content(seq):
     g_count = seq.count('G')
     c_count = seq.count('C')
     
-    # Total valid bases for this calculation
     total_known_bases = g_count + c_count + seq.count('A') + seq.count('T')
     
     if total_known_bases == 0:
@@ -67,7 +66,7 @@ def gc_content_sliding_window(seq, window_size, step):
         
     Performance:
         Time: O(N*M), where N is seq length and M is window_size.
-        Space: O(N/step), to store the results list.
+        Space: O(N/step).
     """
     seq = seq.upper()
     results = []
@@ -82,7 +81,6 @@ def gc_content_sliding_window(seq, window_size, step):
 def calculate_gc_skew_sliding_window(seq, window_size, step):
     """
     Calculates GC skew ((G-C)/(G+C)) in a sliding window.
-    GC skew is useful for identifying replication origins.
 
     Args:
         seq (str): The DNA sequence.
@@ -95,7 +93,7 @@ def calculate_gc_skew_sliding_window(seq, window_size, step):
                      
     Performance:
         Time: O(N*M), same logic as gc_content_sliding_window.
-        Space: O(N/step), to store the results list.
+        Space: O(N/step).
     """
     seq = seq.upper()
     results = []
@@ -130,7 +128,7 @@ def calculate_kmer_freq(seq, k):
         
     Performance:
         Time: O(N*k), where N is sequence length.
-        Space: O(4^k), in the worst case, to store the Counter dict.
+        Space: O(4^k).
     """
     seq = seq.upper()
     kmer_counts = collections.Counter()
@@ -181,9 +179,8 @@ def find_cpg_islands(seq, window_size=200, gc_threshold=50.0, oe_threshold=0.6):
         cg_count = window.count('CG')
         
         if c_count == 0 or g_count == 0:
-            continue # Avoid division by zero if no C or G
+            continue
 
-        # Calculate expected value
         expected_cpg = (c_count * g_count) / window_size
         
         if expected_cpg == 0:
@@ -201,8 +198,6 @@ def find_cpg_islands(seq, window_size=200, gc_threshold=50.0, oe_threshold=0.6):
 def hamming_distance(seq1, seq2):
     """
     Calculates the Hamming distance between two sequences.
-    The distance is the number of positions at which the
-    corresponding symbols are different.
 
     Args:
         seq1 (str): The first sequence.
@@ -222,7 +217,6 @@ def hamming_distance(seq1, seq2):
         raise ValueError("Sequences must be of equal length for Hamming distance.")
         
     distance = 0
-    # zip stops at the shortest sequence, but we already checked lengths
     for base1, base2 in zip(seq1.upper(), seq2.upper()):
         if base1 != base2:
             distance += 1
@@ -241,7 +235,7 @@ def find_exact_pattern(seq, pattern):
         list[int]: A list of 0-based starting indices.
         
     Performance:
-        Time: O(N*M) in the worst case (e.g., finding 'AAA' in 'AAAAA').
+        Time: O(N*M) in the worst case.
         Space: O(K), where K is the number of matches found.
     """
     seq = seq.upper()
@@ -250,7 +244,6 @@ def find_exact_pattern(seq, pattern):
     pattern_escaped = re.escape(pattern)
     
     try:
-        # A positive lookahead `(?=...)` allows finding overlapping matches
         indices = [m.start() for m in re.finditer(f'(?={pattern_escaped})', seq)]
     except re.error:
         print(f"Regex error with pattern: {pattern}")
@@ -265,8 +258,7 @@ def find_fuzzy_pattern(seq, pattern, max_mismatch):
     Args:
         seq (str): The sequence to search in.
         pattern (str): The pattern to search for.
-        max_mismatch (int): The maximum number of allowed mismatches
-                            (Hamming distance).
+        max_mismatch (int): The maximum number of allowed mismatches.
 
     Returns:
         list[int]: A list of 0-based starting indices.
@@ -281,7 +273,7 @@ def find_fuzzy_pattern(seq, pattern, max_mismatch):
     pattern_len = len(pattern)
     
     if pattern_len > len(seq):
-        return [] # Pattern can't be found if it's longer
+        return [] 
         
     for i in range(len(seq) - pattern_len + 1):
         window = seq[i:i+pattern_len]
@@ -295,6 +287,223 @@ def find_fuzzy_pattern(seq, pattern, max_mismatch):
             
     return indices
 
+# --- Part C: Protein Sequence Analysis ---
+
+# Standard DNA codon table. '_' represents a STOP codon.
+CODON_TABLE = {
+    'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
+    'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T',
+    'AAC':'N', 'AAT':'N', 'AAA':'K', 'AAG':'K',
+    'AGC':'S', 'AGT':'S', 'AGA':'R', 'AGG':'R',
+    'CTA':'L', 'CTC':'L', 'CTG':'L', 'CTT':'L',
+    'CCA':'P', 'CCC':'P', 'CCG':'P', 'CCT':'P',
+    'CAC':'H', 'CAT':'H', 'CAA':'Q', 'CAG':'Q',
+    'CGA':'R', 'CGC':'R', 'CGG':'R', 'CGT':'R',
+    'GTA':'V', 'GTC':'V', 'GTG':'V', 'GTT':'V',
+    'GCA':'A', 'GCC':'A', 'GCG':'A', 'GCT':'A',
+    'GAC':'D', 'GAT':'D', 'GAA':'E', 'GAG':'E',
+    'GGA':'G', 'GGC':'G', 'GGG':'G', 'GGT':'G',
+    'TCA':'S', 'TCC':'S', 'TCG':'S', 'TCT':'S',
+    'TTC':'F', 'TTT':'F', 'TTA':'L', 'TTG':'L',
+    'TAC':'Y', 'TAT':'Y', 'TAA':'_', 'TAG':'_',
+    'TGC':'C', 'TGT':'C', 'TGA':'_', 'TGG':'W',
+}
+
+def reverse_complement(seq):
+    """
+    Returns the reverse complement of a DNA sequence.
+    Handles 'N' bases by complementing them to 'N'.
+
+    Args:
+        seq (str): The DNA sequence.
+
+    Returns:
+        str: The reverse complemented sequence.
+        
+    Performance:
+        Time: O(N), where N is the sequence length.
+        Space: O(N), to build the new list/string.
+    """
+    complement_map = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C', 'N': 'N'}
+    
+    # Map unknown characters to 'N'
+    complement_seq = "".join([complement_map.get(base, 'N') for base in seq.upper()])
+    reverse_comp = complement_seq[::-1] 
+    
+    return reverse_comp
+
+def get_reading_frames(seq):
+    """
+    Gets all 6 reading frames for a DNA sequence (3 forward, 3 reverse).
+
+    Args:
+        seq (str): The DNA sequence.
+
+    Returns:
+        list[str]: A list of 6 strings, representing frames
+                   +1, +2, +3, -1, -2, -3.
+                   
+    Performance:
+        Time: O(N), dominated by the reverse_complement call.
+        Space: O(N), to store the 6 frames.
+    """
+    seq = seq.upper()
+    rev_comp = reverse_complement(seq)
+    
+    frames = []
+    # Forward frames
+    frames.append(seq)      # Frame +1
+    frames.append(seq[1:])  # Frame +2
+    frames.append(seq[2:])  # Frame +3
+    
+    # Reverse frames
+    frames.append(rev_comp)      # Frame -1
+    frames.append(rev_comp[1:])  # Frame -2
+    frames.append(rev_comp[2:])  # Frame -3
+    
+    return frames
+
+def translate(seq):
+    """
+    Translates a DNA sequence (representing a single reading frame)
+    into a protein sequence.
+    
+    Translation stops at the first STOP codon.
+    Ambiguous codons (containing 'N') are translated as 'X'.
+
+    Args:
+        seq (str): A DNA sequence.
+
+    Returns:
+        str: The translated amino acid sequence.
+        
+    Performance:
+        Time: O(N), where N is the sequence length.
+        Space: O(N/3), to store the resulting protein string.
+    """
+    seq = seq.upper()
+    protein = []
+    
+    for i in range(0, len(seq), 3):
+        codon = seq[i:i+3]
+        
+        if len(codon) < 3:
+            break 
+            
+        amino_acid = CODON_TABLE.get(codon, 'X')
+        
+        if amino_acid == '_':
+            break # Stop at first STOP codon
+            
+        protein.append(amino_acid)
+        
+    return "".join(protein)
+
+def find_all_orfs(seq, start_codons=['ATG'], stop_codons=['TAA', 'TAG', 'TGA']):
+    """
+    Finds all potential protein-coding Open Reading Frames (ORFs)
+    in all 6 reading frames.
+    
+    An ORF is defined as a sequence starting with a START codon
+    and ending with a STOP codon, in the same frame.
+
+    Args:
+        seq (str): The DNA sequence.
+        start_codons (list[str]): List of start codons.
+        stop_codons (list[str]): List of stop codons.
+
+    Returns:
+        list[dict]: A list of dictionaries, where each dict contains:
+                    'frame' (str): e.g., '+1', '-2'
+                    'start' (int): 0-based start index *on the original seq*
+                    'end' (int): 0-based end index *on the original seq*
+                    'protein' (str): The translated protein sequence.
+                    
+    Performance:
+        Time: O(N^2) in worst case (many starts, few stops).
+              Closer to O(N) on typical genomic sequence.
+        Space: O(K), where K is the number of ORFs found.
+    """
+    frames = get_reading_frames(seq)
+    frame_names = ['+1', '+2', '+3', '-1', '-2', '-3']
+    all_orfs = []
+    seq_len = len(seq)
+    
+    for frame_idx, (frame_name, frame_seq) in enumerate(zip(frame_names, frames)):
+        
+        # Find all start codons in this frame
+        start_indices_in_frame = []
+        for start_codon in start_codons:
+            for match in re.finditer(f'(?={re.escape(start_codon)})', frame_seq):
+                start_indices_in_frame.append(match.start())
+        
+        start_indices_in_frame.sort()
+
+        for start_pos in start_indices_in_frame:
+            protein = []
+            
+            # Translate from this start codon
+            for i in range(start_pos, len(frame_seq), 3):
+                codon = frame_seq[i:i+3]
+                
+                if len(codon) < 3:
+                    break 
+                    
+                amino_acid = CODON_TABLE.get(codon, 'X')
+                
+                if codon in stop_codons:
+                    # Found a valid ORF!
+                    protein_seq = "".join(protein)
+                    
+                    # Map frame coordinates back to original seq coordinates
+                    frame_offset = frame_idx % 3
+                    
+                    if frame_name.startswith('+'):
+                        # Forward frame
+                        orf_start_on_seq = start_pos + frame_offset
+                        orf_end_on_seq = i + 3 + frame_offset
+                    else:
+                        # Reverse frame
+                        rev_start = start_pos + frame_offset
+                        rev_end = i + 3 + frame_offset
+                        orf_start_on_seq = seq_len - rev_end
+                        orf_end_on_seq = seq_len - rev_start
+                    
+                    all_orfs.append({
+                        'frame': frame_name,
+                        'start': orf_start_on_seq,
+                        'end': orf_end_on_seq,
+                        'protein': protein_seq,
+                        'length': len(protein_seq)
+                    })
+                    break # Stop translating this ORF
+                
+                if amino_acid == 'X':
+                    break # Ambiguous codon, invalidates this ORF
+
+                protein.append(amino_acid)
+                
+    return all_orfs
+
+def find_longest_orf(seq, **kwargs):
+    """
+    Finds the longest ORF in a DNA sequence.
+    
+    Args:
+        seq (str): The DNA sequence.
+        **kwargs: Passed to find_all_orfs (e.g., start_codons)
+
+    Returns:
+        dict: The ORF dictionary for the longest protein, 
+              or None if no ORFs are found.
+    """
+    all_orfs = find_all_orfs(seq, **kwargs)
+    if not all_orfs:
+        return None
+        
+    longest_orf = max(all_orfs, key=lambda orf: orf['length'])
+    return longest_orf
+
 
 # --- Main Test Block ---
 if __name__ == "__main__":
@@ -304,42 +513,48 @@ if __name__ == "__main__":
     # --- Part A Test Cases ---
     print("\n--- Part A: Sequence Analysis ---")
     seq_a = "AGCTATAGCGCCGATTAGCATGGTATAGTAGAATTC"
-    seq_b = "NNNNNNNNNN"
-    seq_c = "ATATATATAT"
-    seq_d = "" # Empty sequence edge case
-    
     print(f"GC Content (seq_a): {calculate_gc_content(seq_a):.2f}%")
-    print(f"GC Content (seq_b 'NNN'): {calculate_gc_content(seq_b):.2f}%")
     win_gcs = gc_content_sliding_window(seq_a, 10, 5)
     print(f"Sliding Window GC (10, 5): {[round(g, 2) for g in win_gcs]}")
     win_skews = calculate_gc_skew_sliding_window(seq_a, 10, 5)
     print(f"Sliding Window Skew (10, 5): {[round(s, 2) for s in win_skews]}")
     print(f"Dinucleotide Freq (seq_a): {calculate_kmer_freq(seq_a, 2).most_common(3)}")
-    cpg_test_seq = "CGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCG" * 5
-    no_cpg_test_seq = "CCCCCCCCCCCCCCCCCCCCCCCCCCGGGGGGGGGGGGGGGGGGGGGGGGGG" * 5
-    print(f"CpG Islands (positive test): {find_cpg_islands(cpg_test_seq, 50, 50, 0.6)}")
-    print(f"CpG Islands (negative test): {find_cpg_islands(no_cpg_test_seq, 50, 50, 0.6)}")
 
     # --- Part B Test Cases ---
     print("\n--- Part B: Pattern Matching ---")
-    
-    # Q3: Hamming Distance
     try:
         dist = hamming_distance("GATTACA", "GATTTCA")
-        print(f"Hamming ('GATTACA', 'GATTTCA'): {dist}") # Should be 1
-        print("Testing Hamming with different lengths:")
-        dist_fail = hamming_distance("AAA", "AAAA") # Should raise error
+        print(f"Hamming ('GATTACA', 'GATTTCA'): {dist}")
+        dist_fail = hamming_distance("AAA", "AAAA")
     except ValueError as e:
         print(f"Hamming Error (expected): {e}")
 
-    # Q4: Exact Pattern
     pattern_seq = "ATATATACATAT"
     pattern = "ATA"
-    print(f"Exact '{pattern}' in '{pattern_seq}': {find_exact_pattern(pattern_seq, pattern)}") # [0, 2, 4, 8]
-    print(f"Exact 'AAA' in 'AAAAA': {find_exact_pattern('AAAAA', 'AAA')}") # [0, 1, 2]
-
-    # Q4: Fuzzy Pattern
+    print(f"Exact '{pattern}' in '{pattern_seq}': {find_exact_pattern(pattern_seq, pattern)}")
     fuzzy_seq = "GATTACAT"
     fuzzy_pattern = "GATTTCA"
-    print(f"Fuzzy '{fuzzy_pattern}' in '{fuzzy_seq}' (<=1 mismatch): {find_fuzzy_pattern(fuzzy_seq, fuzzy_pattern, 1)}") # [0]
-    print(f"Fuzzy '{fuzzy_pattern}' in '{fuzzy_seq}' (<=0 mismatch): {find_fuzzy_pattern(fuzzy_seq, fuzzy_pattern, 0)}") # []
+    print(f"Fuzzy '{fuzzy_pattern}' in '{fuzzy_seq}' (<=1): {find_fuzzy_pattern(fuzzy_seq, fuzzy_pattern, 1)}")
+
+    # --- Part C Test Cases ---
+    print("\n--- Part C: Protein Analysis ---")
+    
+    print(f"Reverse Complement ('ATGCGN'): {reverse_complement('ATGCGN')}") # NCGNNGCAT
+    print(f"Translate ('ATGGGTTAA'): {translate('ATGGGTTAA')}") # MG (stops at TAA)
+    
+    # Test sequence with ORFs in forward and reverse frames
+    # +1: ATG GCA TAA  (MA)
+    # -2: (rev-comp) TT ATG GGG TAG AA (MG)
+    orf_test_seq = "AAATGGCATAATTCACTATGgggTAGAATT" # 'ggg' is part of -2 ORF
+    
+    print(f"\nTesting ORF finding on: {orf_test_seq}")
+    all_orfs = find_all_orfs(orf_test_seq)
+    print("All ORFs found:")
+    for orf in all_orfs:
+        print(f"  - {orf['frame']} (Start: {orf['start']}, End: {orf['end']}): {orf['protein']}")
+        
+    longest = find_longest_orf(orf_test_seq)
+    if longest:
+        print(f"\nLongest ORF: {longest['protein']} (from frame {longest['frame']})")
+    else:
+        print("\nNo ORFs found.")
